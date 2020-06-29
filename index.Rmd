@@ -67,7 +67,7 @@ data.validation <- data.not.train[-inTest,]
 
 Let's fit a random forest model. We used a random forest model because random forests usually have high accuracy.
 
-We also performed 10-fold cross validation to estimate the accuracy of the model.
+We also performed 10-fold cross validation to estimate the out of sample error.
 
 ```{r fit-model, cache = TRUE}
 ## Configure parallel processing
@@ -102,7 +102,7 @@ plot(fit, log = "y")
 varImp(fit, scale = FALSE)
 ```
 
-The model includes 500 classification trees with 27 features in each tree. The accuracy of our model on the training set is 99%. Top predictors include `roll_belt`, `pitch_forearm`, and `yaw_belt`. The sensitivity and specificity for each class appears to be similar.
+The model includes 500 classification trees with 27 features in each tree. The accuracy of our model on the training set is 99%. The estimated out of sample error from cross validation is 1%. Top predictors include `roll_belt`, `pitch_forearm`, and `yaw_belt`. The sensitivity and specificity for each class appears to be similar.
 
 Let's look at the performance of our model on our testing set to see if the model is overfitting. 
 
@@ -113,18 +113,18 @@ confusionMatrix(pred, data.test$classe)
 
 The accuracy of our model in the testing set is 99%, which is similar to the accuracy in the training set. Therefore, the model is not overfitting. For our purposes, 99% accuracy is "good" enough, and we will not be refining the model further.
 
-Lastly, let's look at the performance of our model on our validation set to estimate the expected out of sample error.
+Lastly, let's look at the performance of our model on our validation set.
 
 ```{r results-validation}
 pred <- predict(fit, newdata = data.validation)
 confusionMatrix(pred, data.validation$classe)
 ```
 
-The accuracy of our model on our validation set is 99%. Therefore, the estimated out of sample error is 1%.
+The accuracy of our model on our validation set is 99%.
 
 ## Conclusion
 
-We have built a random forest model with 10 fold cross validation. Our final model consists of 500 classification trees with 27 predictors in each tree. The accuracy of our model on the validation set is 99%.
+We have built a random forest model with 10 fold cross validation. Our final model consists of 500 classification trees with 27 predictors in each tree. The accuracy of our model on the validation set is 99%. The estimated out of sample error is 1%.
 
 ## References
 
