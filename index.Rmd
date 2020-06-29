@@ -1,30 +1,131 @@
 ---
 title: "Practical Machine Learning Course Project"
 author: "John Lin"
-date: "6/14/2020"
 output: html_document
 ---
 
-```{r setup, include=FALSE}
+```{r setup, include = FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(message = FALSE)
 ```
 
-## R Markdown
+## Introduction
+Research on activity recognition often focuses on predicting "which" activity was performed, but rarely on "how well" an activity was performed. In this project, we will use data from accelerometers to predict the manner in which a weight lifting exercise was performed.
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+## Dataset
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+Data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants were collected. Participants performed one set of 10 repetitions of the Unilateral Dumbbell Biceps Curl in five different manners (Classes A to E). Class A corresponds to the "correct" execution of the exercise, whereas the other 4 classes correspond to common mistakes. More information about the dataset can be found [here](http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har#wle_paper_section).
 
-```{r cars}
-summary(cars)
+First, read in the dataset.
+
+```{r read-data, cache = TRUE}
+data.orig <- read.csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv")
 ```
 
-## Including Plots
+Let's look at the dimensions of the dataset.
 
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
+```{r dim-data}
+dim(data.orig)
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+The dataset consists of 19622 time windows and 160 variables. 
+
+Let's look at the names of the variables.
+
+```{r names-data}
+names(data.orig)[1:15]
+```
+
+The first 7 columns include information about the subject and the time window. The next columns include features that we are interested in, such as the mean, variance, and standard deviation from accelerator readings. The last column `classe` is the variable we are trying to predict.
+
+Remove the first few columns that include information about the subject and the time window. Convert the remaining feature columns to numeric variables. Remove feature columns that have > 90% NA values. 
+
+```{r preprocess-data, warning = FALSE}
+# Remove columns about subject and time window
+data <- data.orig[,-(1:7)]
+# Convert feature columns to numeric
+data[,-dim(data)[2]] <- apply(data[,-dim(data)[2]], 2, as.numeric)
+# Remove feature columns with > 90% NAs
+row.index <- apply(apply(data, 2, is.na), 2, sum) < 0.9 * dim(data)[1]
+data <- data[,row.index]
+```
+
+Split the dataset into train, test, and validation sets.
+
+```{r split-data}
+library(caret)
+set.seed(41705)
+inTrain <- createDataPartition(y = data$classe, p = 0.6, list = FALSE)
+data.train <- data[inTrain,]
+data.not.train <- data[-inTrain,]
+inTest <- createDataPartition(y = data.not.train$classe, p = 0.5, list = FALSE)
+data.test <- data.not.train[inTest,]
+data.validation <- data.not.train[-inTest,]
+```
+
+## Model
+
+Let's fit a random forest model. We used a random forest model because random forests usually have high accuracy.
+
+We also performed 10-fold cross validation to estimate the accuracy of the model.
+
+```{r fit-model, cache = TRUE}
+## Configure parallel processing
+library(parallel)
+library(doParallel)
+cluster <- makeCluster(detectCores() - 1)
+registerDoParallel(cluster)
+
+## Configure trainControl object
+fitControl <- trainControl(
+  method = "cv",
+  number = 10,
+  allowParallel = TRUE
+)
+
+## Develop training model
+fit <- train(classe ~ ., data = data.train, method = "rf", trControl = fitControl)
+
+## Deregister parallel processing cluster
+stopCluster(cluster)
+registerDoSEQ()
+```
+
+## Results
+
+Let's look at our final random forest model. We'll also plot a figure comparing the accuracy of 3 random forest models with different numbers of predictors. We'll then calculate the variable importance for the top 20 predictors.
+
+```{r results-train}
+library(randomForest)
+fit$finalModel
+plot(fit, log = "y")
+varImp(fit, scale = FALSE)
+```
+
+The model includes 500 classification trees with 27 features in each tree. The accuracy of our model on the training set is 99%. Top predictors include `roll_belt`, `pitch_forearm`, and `yaw_belt`. The sensitivity and specificity for each class appears to be similar.
+
+Let's look at the performance of our model on our testing set to see if the model is overfitting. 
+
+```{r results-test}
+pred <- predict(fit, newdata = data.test)
+confusionMatrix(pred, data.test$classe)
+```
+
+The accuracy of our model in the testing set is 99%, which is similar to the accuracy in the training set. Therefore, the model is not overfitting. For our purposes, 99% accuracy is "good" enough, and we will not be refining the model further.
+
+Lastly, let's look at the performance of our model on our validation set to estimate the expected out of sample error.
+
+```{r results-validation}
+pred <- predict(fit, newdata = data.validation)
+confusionMatrix(pred, data.validation$classe)
+```
+
+The accuracy of our model on our validation set is 99%. Therefore, the estimated out of sample error is 1%.
+
+## Conclusion
+
+We have built a random forest model with 10 fold cross validation. Our final model consists of 500 classification trees with 27 predictors in each tree. The accuracy of our model on the validation set is 99%.
+
+## References
+
+Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H. Qualitative Activity Recognition of Weight Lifting Exercises. Proceedings of 4th International Conference in Cooperation with SIGCHI (Augmented Human '13) . Stuttgart, Germany: ACM SIGCHI, 2013.
